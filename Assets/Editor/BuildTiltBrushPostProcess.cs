@@ -93,6 +93,20 @@ public class BuildTiltBrushPostProcess
             namespaceManager) as XmlElement;
         if (launcherActivity == null)
         {
+            // Newer Unity versions rename the custom manifest's PlayerActivity to GameActivity
+            // themselves when GameActivity is the selected entry point, carrying the custom
+            // attributes and intent filters across. There is then nothing left to convert, and
+            // the conversion below has already effectively been done for us.
+            var gameActivityLauncher = doc.SelectSingleNode(
+                "/manifest/application/activity[@android:name='" + kGameActivity + "']" +
+                "[intent-filter/action[@android:name='android.intent.action.MAIN']]" +
+                "[intent-filter/category[@android:name='android.intent.category.LAUNCHER']]",
+                namespaceManager) as XmlElement;
+            if (gameActivityLauncher != null)
+            {
+                return;
+            }
+
             throw new BuildTiltBrush.BuildFailedException(
                 "The generated Android manifest has no PlayerActivity launcher to convert " +
                 "for the selected GameActivity entry point.");

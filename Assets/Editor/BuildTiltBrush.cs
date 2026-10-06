@@ -52,7 +52,13 @@ static class BuildTiltBrush
     // OSX Executable
     public const string kGuiBuildOsxExecutableName = kGuiBuildExecutableName + ".app";
     // Android Application Identifier
-    public static string GuiBuildAndroidApplicationIdentifier => $"{kVendorReverseDNS}.{kGuiBuildExecutableName}".ToLower();
+    // This fork ships under its own id. The Pico 4's entitlement service
+    // (com.bytedance.pico.matrix) intercepts any foundation.icosa.openbrush APK that is not
+    // signed with the upstream key, force-stops it and shows its "go to store" dialog, so a
+    // locally built APK cannot launch under the store id. The service is a protected system
+    // package, so it cannot be disabled without root and the id is what has to change.
+    public static string GuiBuildAndroidApplicationIdentifier =>
+        $"{kVendorReverseDNS}.{kGuiBuildExecutableName}.pico4".ToLower();
     // Android Executable
     public static string GuiBuildAndroidExecutableName => GuiBuildAndroidApplicationIdentifier + ".apk";
     public static string GuiBuildiOSApplicationIdentifier => $"{kVendorReverseDNS}.{kGuiBuildExecutableName}".ToLower();
