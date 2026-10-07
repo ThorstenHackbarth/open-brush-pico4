@@ -77,6 +77,29 @@ public class BuildTiltBrushPostProcess
     /// project asset during a build, and leaves every build that selects PlayerActivity untouched.
     /// XR library manifests are merged into the final application by Gradle.
     /// </remarks>
+    /// Lists the activities in a generated manifest, with the attributes that decide which one
+    /// Android treats as the launcher. Diagnostic only.
+    private static string DescribeActivities(XmlDocument doc, XmlNamespaceManager ns)
+    {
+        var nodes = doc.SelectNodes("/manifest/application/activity", ns);
+        if (nodes == null || nodes.Count == 0)
+        {
+            return "<none>";
+        }
+        var parts = new System.Collections.Generic.List<string>();
+        foreach (XmlElement a in nodes)
+        {
+            bool main = a.SelectSingleNode(
+                "intent-filter/action[@android:name='android.intent.action.MAIN']", ns) != null;
+            bool launcher = a.SelectSingleNode(
+                "intent-filter/category[@android:name='android.intent.category.LAUNCHER']", ns) != null;
+            parts.Add($"{a.GetAttribute("name", kAndroidNamespace)}" +
+                      $"(enabled={a.GetAttribute("enabled", kAndroidNamespace)}," +
+                      $"main={main},launcher={launcher})");
+        }
+        return string.Join(" | ", parts);
+    }
+
     private static void ConfigureGameActivityLauncher(XmlDocument doc)
     {
         if (PlayerSettings.Android.applicationEntry != AndroidApplicationEntry.GameActivity)
@@ -93,10 +116,15 @@ public class BuildTiltBrushPostProcess
             namespaceManager) as XmlElement;
         if (launcherActivity == null)
         {
-            // Newer Unity versions rename the custom manifest's PlayerActivity to GameActivity
-            // themselves when GameActivity is the selected entry point, carrying the custom
-            // attributes and intent filters across. There is then nothing left to convert, and
-            // the conversion below has already effectively been done for us.
+            // In some environments Unity emits a single GameActivity launcher, having already
+            // folded the custom manifest's PlayerActivity (launch mode, intent filters) into it.
+            // There is then nothing left to convert and the work below is already done.
+            //
+            // This is NOT the case in Open Brush's CI, where the same commit and Unity version
+            // produce a PlayerActivity launcher and the conversion below runs normally - the
+            // Android OpenXR job is green upstream. It reproduces on a locally assembled
+            // Android SDK/NDK/JDK toolchain, so treat this branch as toolchain tolerance rather
+            // than a fix for an upstream defect, and do not assume upstream is broken.
             var gameActivityLauncher = doc.SelectSingleNode(
                 "/manifest/application/activity[@android:name='" + kGameActivity + "']" +
                 "[intent-filter/action[@android:name='android.intent.action.MAIN']]" +
@@ -104,6 +132,9 @@ public class BuildTiltBrushPostProcess
                 namespaceManager) as XmlElement;
             if (gameActivityLauncher != null)
             {
+                UnityEngine.Debug.Log("[OB-LAUNCHER] No PlayerActivity launcher to convert; Unity " +
+                    "already emitted a GameActivity launcher. Activities present: " +
+                    DescribeActivities(doc, namespaceManager));
                 return;
             }
 
@@ -111,6 +142,9 @@ public class BuildTiltBrushPostProcess
                 "The generated Android manifest has no PlayerActivity launcher to convert " +
                 "for the selected GameActivity entry point.");
         }
+
+        UnityEngine.Debug.Log("[OB-LAUNCHER] Converting PlayerActivity launcher to GameActivity. " +
+            "Activities present: " + DescribeActivities(doc, namespaceManager));
 
         // Preserve Unity's generated launch mode, configuration changes, orientation, and other
         // project-specific attributes. Only the GameActivity-specific identity and bootstrap
